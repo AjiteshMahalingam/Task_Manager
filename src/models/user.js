@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const validator = require('validator');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const Task = require('./task');
 
 const userSchema = new mongoose.Schema({
     name : {
@@ -41,18 +42,22 @@ const userSchema = new mongoose.Schema({
     }, 
     tokens : [{
         token: {
-            type: String,
-            required: true
+            type: String
         }
     }]
+},{
+    timestamps: true
 });
 
-userSchema.methods.generateAuthToken = async () => {
-    const user = this;
-    const token = await jwt.sign({ _id : user._id }, 'thisistorvus');  
+userSchema.virtual('tasks', {
+    ref: 'task',
+    localField: '_id',
+    foreignField: 'owner'
+});
+
+userSchema.methods.generateAuthToken = async (id) => {
+    const token = await jwt.sign({ _id : id }, 'thisistorvus');  
     const decoded = jwt.verify(token, 'thisistorvus');
-    user.tokens.push({ token });
-    await user.save();
     return token;
 }
 
@@ -74,6 +79,11 @@ userSchema.pre('save', async  function(next) {
     next();
 });
 
+userSchema.pre('remove', async function(next) {
+    const user = this;
+    await Task.deleteMany({owner : user._id});
+    next();
+})
 const User = mongoose.model('user', userSchema);
 
 User.createIndexes();
